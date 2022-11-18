@@ -27,6 +27,8 @@ OPERATOR_MAP = {
     '>=': operator.ge,
     '>': operator.gt,
     '=~': lambda a, b: True if re.search(b, a) else False,
+    '~': lambda a, b: b in a,  # contains
+    '!~': lambda a, b: b not in a  # not contains
 }
 
 
