@@ -20,6 +20,8 @@ from . import filter as _filter
 from . import iterable as _iterable
 from . import string as _string
 
+import re
+
 
 class ExtendedJsonPathLexer(lexer.JsonPathLexer):
     """Custom LALR-lexer for JsonPath"""
@@ -28,7 +30,7 @@ class ExtendedJsonPathLexer(lexer.JsonPathLexer):
               parser.JsonPathLexer.tokens +
               ['FILTER_OP', 'SORT_DIRECTION', 'FLOAT'])
 
-    t_FILTER_OP = r'=~|==?|<=|>=|!=|<|>'
+    t_FILTER_OP = r'=~|==?|<=|>=|!=|<|>|~|!~'
 
     def t_BOOL(self, t):
         r'true|false'
@@ -102,6 +104,8 @@ class ExtentedJsonPathParser(parser.JsonPathParser):
             p[0] = _string.Sub(p[1])
         elif p[1].startswith("str("):
             p[0] = _string.Str(p[1])
+        elif p[1].startswith("containskey("):  # e.g. @.`containskey(some_key)`
+            p[0] = ContainsKey(p[1])
         else:
             super(ExtentedJsonPathParser, self).p_jsonpath_named_operator(p)
 
@@ -166,6 +170,35 @@ class ExtentedJsonPathParser(parser.JsonPathParser):
     ] + parser.JsonPathParser.precedence + [
         ('nonassoc', 'ID'),
     ]
+
+
+CONTAINSKEY = re.compile(r"containskey\((.*)\)")
+
+
+class ContainsKey(This):
+    def __init__(self, method=None):
+        m = CONTAINSKEY.match(method)
+        if m is None:
+            raise DefintionInvalid("%s is not valid" % method)
+        self.key = m.group(1)
+        self.method = method
+
+    def find(self, datum):
+        datum = DatumInContext.wrap(datum)
+        try:
+            value = datum.value.split(self.char, self.max_split)[self.segment]
+        except Exception:
+            return []
+        return [DatumInContext.wrap(value)]
+
+    def __eq__(self, other):
+        return (isinstance(other, ContainsKey) and self.method == other.method)
+
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.method)
+
+    def __str__(self):
+        return '`%s`' % self.method
 
 
 def parse(path, debug=False):
